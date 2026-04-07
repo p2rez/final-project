@@ -17,19 +17,47 @@ Replace this paragraph with your own summary of what your version does.
 
 ## How The System Works
 
-Explain your design in plain language.
+### Algorithm Recipe
 
-Some prompts to answer:
+Our music recommender uses a content-based filtering approach that scores songs based on how well they match a user's taste profile. Each song receives points across two criteria:
 
-- What features does each `Song` use in your system
-  - For example: genre, mood, energy, tempo
-- What information does your `UserProfile` store
-- How does your `Recommender` compute a score for each song
-- How do you choose which songs to recommend
+**Genre Match (0.5 points max):**
+- **Genre Match**: +0.5 points if the song's genre exactly matches the user's favorite genre
+- No partial credit for near-genre matches
 
-You can include a simple diagram or bullet list if helpful.
+**Energy Similarity (up to ~2.0 points):**
+- Score is computed as `1 / (1 + |song_energy - target_energy|) × 2.0`
+- A perfect match (0.0 difference) yields the maximum of 2.0 points
+- Score decreases continuously as the energy difference grows
+- No hard cutoff — every song gets some energy score
 
----
+**Note:** Mood scoring is currently disabled for sensitivity testing. Songs are ranked primarily by energy closeness, with genre acting as a tiebreaker.
+
+**Maximum Score**: ~2.5 points (genre match + perfect energy) | **Minimum Score**: ~0 points
+
+### Data Flow Process
+
+1. **Input**: User provides preferences (favorite_genre, favorite_mood, target_energy, likes_acoustic)
+2. **Processing**: System loads songs from CSV and scores each song using the algorithm above
+3. **Output**: Returns top K recommendations (default K=5) sorted by score, with explanations
+
+### Potential Biases and Limitations
+
+**Genre Over-Prioritization**: The system heavily weights genre matches (+2.0 points) compared to mood (+1.0 point), which may cause it to recommend songs that match the user's favorite genre but ignore excellent songs that perfectly match their preferred mood.
+
+**Energy Similarity Threshold**: The current 0.4 energy difference cutoff means songs with energy levels outside this range get zero similarity points, potentially excluding songs that could still be enjoyable despite moderate energy differences.
+
+**Limited Feature Set**: The system only considers basic audio features and categorical preferences, missing important factors like tempo preferences, lyrical content, or cultural context that real music recommenders consider.
+
+**Small Catalog Impact**: With a limited song database, the system may not have enough variety to properly test edge cases or demonstrate the algorithm's effectiveness across different user types.
+
+### Example Output
+
+Here's a screenshot of the terminal output showing recommendations for a user profile preferring "pop" genre, "happy" mood, and energy level 0.8:
+
+![Terminal recommendation screenshot](./screenshot-recommendation.png)
+
+This output demonstrates how the system explains its recommendations with transparent scoring breakdowns.
 
 ## Getting Started
 
@@ -68,144 +96,29 @@ You can add more tests in `tests/test_recommender.py`.
 
 ## Experiments You Tried
 
-Use this section to document the experiments you ran. For example:
-
-- What happened when you changed the weight on genre from 2.0 to 0.5
-- What happened when you added tempo or valence to the score
-- How did your system behave for different types of users
+- **Changed genre weight from 2.0 to 0.5**: Reducing the genre weight made energy the dominant factor. Songs with very close energy to the target ranked first even when the genre didn't match, which produced surprising but sometimes reasonable results.
+- **Disabled mood scoring**: Removing the mood bonus (+1.0) to test sensitivity revealed that the system still ranked genre-matching songs near the top due to energy being a strong signal. However, it exposed a real weakness — two songs with identical genre and energy can't be distinguished by mood at all.
+- **Tested adversarial profiles** (see `run_profiles.py`): Profiles with conflicting preferences (e.g., `favorite_mood='sad'` but `target_energy=0.9`) caused the system to recommend intense high-energy tracks regardless of mood. A user who wants calm sad music would get completely wrong results.
+- **Tried a profile with a non-existent genre** (`classical` with `ecstatic` mood): No songs matched genre, so all results were ranked by energy alone — the system silently falls back without warning the user.
 
 ---
 
 ## Limitations and Risks
 
-Summarize some limitations of your recommender.
-
-Examples:
-
-- It only works on a tiny catalog
-- It does not understand lyrics or language
-- It might over favor one genre or mood
-
-You will go deeper on this in your model card.
+- It only works on a tiny 18-song catalog, so results repeat and variety is limited
+- It does not understand lyrics, language, cultural context, or tempo preferences
+- Mood scoring is currently disabled, so two users with opposite moods but the same energy target get identical recommendations
+- Genre matching is all-or-nothing — a "jazz" fan gets no credit for liking a "blues" song
+- The acoustic preference field in `UserProfile` is collected but never used in scoring
 
 ---
 
 ## Reflection
 
-Read and complete `model_card.md`:
-
 [**Model Card**](model_card.md)
 
-Write 1 to 2 paragraphs here about what you learned:
+Building this recommender made it clear how much a scoring formula shapes what users see — and what they don't. Changing a single weight (like dropping genre from 2.0 to 0.5) completely reshuffled results, which showed how the same data can tell very different "stories" depending on the designer's choices. The most surprising moment was running adversarial profiles: a user who prefers sad, low-energy music still received high-energy pop tracks because the energy signal dominated everything else.
 
-- about how recommenders turn data into predictions
-- about where bias or unfairness could show up in systems like this
+This made me think about real systems like Spotify or YouTube. Their algorithms face the same tradeoffs at massive scale — and the consequences of getting them wrong (showing someone the wrong kind of content repeatedly) are much larger. Human judgment still matters when deciding *which* features to weight and *whose* preferences count. A model that optimizes for one group's taste can be unfair to users with different backgrounds or listening habits, even if it's technically "correct" by its own scoring rules.
 
-
----
-
-## 7. `model_card_template.md`
-
-Combines reflection and model card framing from the Module 3 guidance. :contentReference[oaicite:2]{index=2}  
-
-```markdown
-# 🎧 Model Card - Music Recommender Simulation
-
-## 1. Model Name
-
-Give your recommender a name, for example:
-
-> VibeFinder 1.0
-
----
-
-## 2. Intended Use
-
-- What is this system trying to do
-- Who is it for
-
-Example:
-
-> This model suggests 3 to 5 songs from a small catalog based on a user's preferred genre, mood, and energy level. It is for classroom exploration only, not for real users.
-
----
-
-## 3. How It Works (Short Explanation)
-
-Describe your scoring logic in plain language.
-
-- What features of each song does it consider
-- What information about the user does it use
-- How does it turn those into a number
-
-Try to avoid code in this section, treat it like an explanation to a non programmer.
-
----
-
-## 4. Data
-
-Describe your dataset.
-
-- How many songs are in `data/songs.csv`
-- Did you add or remove any songs
-- What kinds of genres or moods are represented
-- Whose taste does this data mostly reflect
-
----
-
-## 5. Strengths
-
-Where does your recommender work well
-
-You can think about:
-- Situations where the top results "felt right"
-- Particular user profiles it served well
-- Simplicity or transparency benefits
-
----
-
-## 6. Limitations and Bias
-
-Where does your recommender struggle
-
-Some prompts:
-- Does it ignore some genres or moods
-- Does it treat all users as if they have the same taste shape
-- Is it biased toward high energy or one genre by default
-- How could this be unfair if used in a real product
-
----
-
-## 7. Evaluation
-
-How did you check your system
-
-Examples:
-- You tried multiple user profiles and wrote down whether the results matched your expectations
-- You compared your simulation to what a real app like Spotify or YouTube tends to recommend
-- You wrote tests for your scoring logic
-
-You do not need a numeric metric, but if you used one, explain what it measures.
-
----
-
-## 8. Future Work
-
-If you had more time, how would you improve this recommender
-
-Examples:
-
-- Add support for multiple users and "group vibe" recommendations
-- Balance diversity of songs instead of always picking the closest match
-- Use more features, like tempo ranges or lyric themes
-
----
-
-## 9. Personal Reflection
-
-A few sentences about what you learned:
-
-- What surprised you about how your system behaved
-- How did building this change how you think about real music recommenders
-- Where do you think human judgment still matters, even if the model seems "smart"
 
