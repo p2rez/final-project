@@ -1,6 +1,15 @@
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 import csv
+import logging
+import os
+
+# Log warnings and errors to a file so failures are recorded, not just printed
+logging.basicConfig(
+    filename="data/recommender.log",
+    level=logging.WARNING,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
 
 @dataclass
 class Song:
@@ -18,6 +27,8 @@ class Song:
     valence: float
     danceability: float
     acousticness: float
+    # Added to store fictional artist biography for display in results
+    bio: str = ""
 
 @dataclass
 class UserProfile:
@@ -89,23 +100,35 @@ class Recommender:
 
 def load_songs(csv_path: str) -> List[Song]:
     """Load songs from a CSV file and return them as Song objects."""
+    # Guardrail: catch missing CSV file with a clear error message
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"Songs file not found: '{csv_path}'. Make sure the data folder is present.")
+
     songs = []
     with open(csv_path, 'r') as f:
         reader = csv.DictReader(f)
-        for row in reader:
-            song = Song(
-                id=int(row['id']),
-                title=row['title'],
-                artist=row['artist'],
-                genre=row['genre'],
-                mood=row['mood'],
-                energy=float(row['energy']),
-                tempo_bpm=float(row['tempo_bpm']),
-                valence=float(row['valence']),
-                danceability=float(row['danceability']),
-                acousticness=float(row['acousticness'])
-            )
-            songs.append(song)
+        for i, row in enumerate(reader, start=2):
+            # Guardrail: skip rows with bad numeric values instead of crashing the entire load
+            try:
+                song = Song(
+                    id=int(row['id']),
+                    title=row['title'],
+                    artist=row['artist'],
+                    genre=row['genre'],
+                    mood=row['mood'],
+                    energy=float(row['energy']),
+                    tempo_bpm=float(row['tempo_bpm']),
+                    valence=float(row['valence']),
+                    danceability=float(row['danceability']),
+                    acousticness=float(row['acousticness']),
+                    # Load artist bio added to CSV for recommendation display
+                    bio=row.get('bio', '')
+                )
+                songs.append(song)
+            except (ValueError, KeyError) as e:
+                # Log bad rows to file instead of only printing to terminal
+                logging.warning("Skipping row %d due to bad data: %s", i, e)
+                print(f"Warning: skipping row {i} due to bad data ({e})")
     return songs
 
 def score_song(user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
@@ -113,27 +136,25 @@ def score_song(user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
     score = 0.0
     reasons = []
     
-    # Genre match: half weight for exact match
+    # Rebalanced: genre, mood, and energy each contribute equally (max +1.0)
     if song['genre'] == user_prefs['genre']:
-        score += 0.5
-        reasons.append("genre match (+0.5)")
+        score += 1.0
+        reasons.append("genre match (+1.0)")
     else:
         reasons.append("genre mismatch")
-    
-    # Mood feature temporarily removed for sensitivity testing
-    # if song['mood'] == user_prefs['mood']:
-    #     score += 1.0
-    #     reasons.append("mood match (+1.0)")
-    # else:
-    #     reasons.append("mood mismatch")
-    reasons.append("mood ignored")
-    
-    # Energy score: double weight for closeness-based match
+
+    # Restored mood matching — was previously disabled for sensitivity testing
+    if song['mood'] == user_prefs['mood']:
+        score += 1.0
+        reasons.append("mood match (+1.0)")
+    else:
+        reasons.append("mood mismatch")
+
+    # Energy score: capped at 1.0 to match genre and mood weight
     energy_diff = abs(song['energy'] - user_prefs['energy'])
     energy_score = 1 / (1 + energy_diff)
-    weighted_energy = energy_score * 2.0
-    score += weighted_energy
-    reasons.append(f"energy closeness (+{weighted_energy:.2f})")
+    score += energy_score
+    reasons.append(f"energy closeness (+{energy_score:.2f})")
     
     return score, reasons
 
@@ -153,6 +174,8 @@ def recommend_songs(user_prefs: Dict, songs: List[Dict], k: int = 5) -> List[Tup
             'valence': song_item.valence,
             'danceability': song_item.danceability,
             'acousticness': song_item.acousticness,
+            # Include bio so it is available when displaying results in main.py
+            'bio': song_item.bio,
         }
 
     scored = [
