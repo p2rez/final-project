@@ -8,18 +8,19 @@ This project originates from the **Music Recommender Simulation** built across M
 
 ## Title and Summary
 
-**Music Recommender Simulation** is a command-line application that generates personalized song recommendations based on a randomized user profile. It matters because it makes the mechanics of recommendation algorithms visible — every result comes with a score breakdown explaining exactly why a song was suggested, which mirrors how systems like Spotify or YouTube work under the hood, but without the black box.
+**Music Recommender Simulation** is a command-line application that generates personalized song recommendations based on a randomized user profile. It matters because it makes the mechanics of recommendation algorithms visible — every result comes with a score breakdown explaining exactly why a song was suggested, which mirrors how systems like Spotify or YouTube work under the hood, but without the black box. A Gemini AI integration adds a natural-language "Why you might like this" insight for each recommendation, generated live by a large language model.
 
 ---
 
 ## Architecture Overview
 
-The system is built around four core components that pass data through a linear pipeline:
+The system is built around five core components that pass data through a linear pipeline:
 
 1. **Data Store** (`songs.csv`) — 60 songs with genre, mood, energy, and a fictional 2-sentence artist biography.
 2. **Loader** (`load_songs`) — reads and validates the CSV, skipping any malformed rows with a warning rather than crashing.
 3. **Profile Generator** (`random_user_prefs`) — picks a random genre, mood, and energy level each run, seeded from OS entropy to guarantee uniqueness.
 4. **Scorer + Recommender** (`score_song`, `recommend_songs`) — scores every song against the profile using three equally weighted factors (genre, mood, energy), then returns the top 5.
+5. **Gemini AI Insight** (`get_ai_insight`) — calls the Gemini API to generate a one-sentence natural-language explanation of why each top song fits the listener's profile.
 
 A **human checkpoint** sits at the end of each run: the user reviews the results and decides whether to generate again. A persistent counter file tracks how many generations have occurred across all sessions.
 
@@ -36,14 +37,19 @@ OS entropy ──► random seed          │
                                                      ▼
                                            sorted top-5 results
                                                      │
-                                                     ▼
-                                         ┌───────────────────────┐
-                                         │   Human Reviews       │
-                                         │   Run again? yes/no   │
-                                         └───────────────────────┘
-                                                     │
-                                          generation_count.txt
-                                          (incremented each run)
+                                    ┌────────────────┘
+                                    ▼
+                             get_ai_insight
+                          (Gemini API per song)
+                                    │
+                                    ▼
+                         ┌───────────────────────┐
+                         │   Human Reviews       │
+                         │   Run again? yes/no   │
+                         └───────────────────────┘
+                                    │
+                         generation_count.txt
+                         (incremented each run)
 ```
 
 ---
@@ -71,11 +77,21 @@ source .venv/bin/activate      # Mac / Linux
 pip install -r requirements.txt
 ```
 
-### 4. Run the application
+### 4. Set your Gemini API key
+
+The app uses the Gemini API to generate a personalized insight for each recommendation. Get a free key at [aistudio.google.com](https://aistudio.google.com), then set it in your terminal:
+
+```bash
+export GEMINI_API_KEY=your_key_here
+```
+
+If the key is missing, the app runs normally but skips the AI insight lines.
+
+### 5. Run the application
 
 ```bash
 cd final-project
-python -m src.main
+python3 src/main.py
 ```
 
 ### 5. Run the tests
@@ -105,6 +121,8 @@ Top recommendations:
      - genre match (+1.0)
      - mood match (+1.0)
      - energy closeness (+0.94)
+   Why you might like this: This high-energy pop track perfectly matches your
+   upbeat mood and love of pop, making it an ideal pick-me-up for your playlist.
 
 🎵 Sunrise City by Neon Echo
    Score: 2.93
@@ -115,6 +133,8 @@ Top recommendations:
      - genre match (+1.0)
      - mood match (+1.0)
      - energy closeness (+0.93)
+   Why you might like this: With its bright, driving energy and happy pop sound,
+   Sunrise City should feel like a natural fit for your current vibe.
 
 Would you like to generate again? (yes/no):
 ```
@@ -138,6 +158,8 @@ Top recommendations:
      - genre match (+1.0)
      - mood match (+1.0)
      - energy closeness (+0.99)
+   Why you might like this: This lofi track is basically built for your focused
+   headspace — low energy, calm mood, and a hazy texture perfect for deep work.
 
 🎵 Deep Focus by LoRoom
    Score: 2.97
@@ -148,6 +170,8 @@ Top recommendations:
      - genre match (+1.0)
      - mood match (+1.0)
      - energy closeness (+0.97)
+   Why you might like this: Another strong match — similar tempo and that same
+   focused, unhurried feel that pairs well with your current energy level.
 
 Would you like to generate again? (yes/no):
 ```
@@ -196,6 +220,9 @@ A flat text file (`generation_count.txt`) was chosen over a database because the
 
 ### Artist bios stored in the CSV
 Rather than making live API calls to Wikipedia (which would fail since all artists are fictional), bios were written once and stored directly in the CSV alongside the song data. This keeps the system fully self-contained and offline-capable.
+
+### Gemini AI for natural-language insights
+After scoring, each top result is passed to the Gemini API (`gemini-2.5-flash-lite`) with a prompt describing the user profile and song attributes. The model returns a single friendly sentence explaining why that song fits the listener. The call is wrapped in a try/except so a quota error or missing key never crashes the program — it simply omits the insight line. This keeps the AI feature additive rather than load-bearing.
 
 ### Trade-offs
 - The scoring formula is simple and interpretable but cannot capture nuance. Two songs with identical genre, mood, and energy score identically even if they sound nothing alike.

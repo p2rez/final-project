@@ -14,6 +14,36 @@ import os
 import random
 from recommender import load_songs, recommend_songs
 
+# Gemini AI insight — requires GEMINI_API_KEY env var; skipped gracefully if missing
+try:
+    from google import genai as _genai
+    _gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    _gemini_client = _genai.Client(api_key=_gemini_key) if _gemini_key else None
+except ImportError:
+    _gemini_client = None
+
+
+def get_ai_insight(user_prefs: dict, title: str, artist: str, genre: str, mood: str, energy: float) -> str:
+    """Call Gemini to generate a one-sentence personal insight for a recommendation."""
+    if _gemini_client is None:
+        return ""
+    prompt = (
+        f"A music listener who enjoys {user_prefs['genre']} music, "
+        f"a {user_prefs['mood']} mood, and energy level {user_prefs['energy']:.2f} "
+        f"was recommended '{title}' by {artist} "
+        f"(genre: {genre}, mood: {mood}, energy: {energy:.2f}). "
+        "In one sentence, explain in a friendly tone why this song might resonate with them."
+    )
+    try:
+        response = _gemini_client.models.generate_content(
+            model="gemini-2.5-flash-lite", contents=prompt
+        )
+        return response.text.strip()
+    except Exception as e:
+        # Log API failures without crashing the recommendation loop
+        logging.warning("Gemini API call failed: %s", e)
+        return ""
+
 # Log application-level warnings to the same file as recommender.py
 logging.basicConfig(
     filename="data/recommender.log",
@@ -86,6 +116,9 @@ def main() -> None:
             artist = song.artist
         # Display artist bio from CSV alongside song details
         bio = song.get('bio', '') if isinstance(song, dict) else song.bio
+        genre = song.get('genre', '') if isinstance(song, dict) else song.genre
+        mood = song.get('mood', '') if isinstance(song, dict) else song.mood
+        energy = song.get('energy', 0.0) if isinstance(song, dict) else song.energy
         print(f"🎵 {title} by {artist}")
         print(f"   Score: {score:.2f}")
         if bio:
@@ -93,6 +126,10 @@ def main() -> None:
         print("   Reasons:")
         for reason in reasons:
             print(f"     - {reason}")
+        # AI-generated insight explaining why this song fits the listener
+        insight = get_ai_insight(user_prefs, title, artist, genre, mood, energy)
+        if insight:
+            print(f"   Why you might like this: {insight}")
         print()
 
 
