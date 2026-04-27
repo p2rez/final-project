@@ -1,5 +1,11 @@
 # Music Recommender Simulation
 
+## Live Demo
+
+[![Watch the demo](https://cdn.loom.com/sessions/thumbnails/2e58a6813dcb4564b106c3b913d08699-with-play.gif)](https://www.loom.com/share/2e58a6813dcb4564b106c3b913d08699)
+
+---
+
 ## Original Project
 
 This project originates from the **Music Recommender Simulation** built across Modules 1–3. The original goal was to represent songs and a user taste profile as structured data, then design a content-based scoring algorithm that turns that data into ranked recommendations. It demonstrated how real-world AI recommenders work by making the scoring logic transparent and explainable, returning not just results but the reasons behind each one.
