@@ -2,7 +2,7 @@
 
 ## Live Demo
 
-[![Watch the demo](https://cdn.loom.com/sessions/thumbnails/2e58a6813dcb4564b106c3b913d08699-with-play.gif)](https://www.loom.com/share/2e58a6813dcb4564b106c3b913d08699)
+[Watch the live demo on Loom](https://www.loom.com/share/2e58a6813dcb4564b106c3b913d08699)
 
 ---
 
