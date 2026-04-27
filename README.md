@@ -103,7 +103,13 @@ python3 src/main.py
 ### 5. Run the tests
 
 ```bash
-pytest
+python3 -m pytest tests/ -v
+```
+
+If that doesn't work, try:
+
+```bash
+pytest tests/ -v
 ```
 
 ---
